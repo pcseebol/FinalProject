@@ -127,3 +127,5 @@ facet_wrap(~GenHlth)
 ```
 
 Here, we see that there is a higher proportion of diabetes in groups that report lower general health. This matches with the intuition that individuals with diabetes may consider themselves to be less healthy on average. Now that we have gotten an idea for how the variables relate, we can move onto training our models in our second document.
+
+[Click here for the Modeling Page](Modeling.html)
