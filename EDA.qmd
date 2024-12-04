@@ -1,0 +1,69 @@
+---
+title: "EDA"
+author: "Patrick Seebold"
+format: pdf
+editor: visual
+---
+
+```{r, echo = FALSE}
+library(tidymodels)
+library(dplyr)
+library(ggplot2)
+```
+
+In this project, we will construct a predictive model based on diabetes status. This means we will create a model that, given some information about a new patient, we will be able to predict whether they will have diabetes or not. We'll use a publicly available data set for this (diabetes_binary_health_indicators_BRFSS2015.csv), and will then deploy the model in a docker file to allow for easy sharing/calling of the program. This document will handle the EDA, and the second file will handle the training/testing of the model. First, let's grab the data:
+
+head(data)
+
+sum(is.na(data))
+
+```{r}
+data = read.csv("diabetes_binary_health_indicators_BRFSS2015.csv")
+```
+
+Next, let's take a look at the head of the file to confirm everything loaded in. Then we'll check for missing data, and finally adjust the type of our variables of interest. Rather than use the standard predictive variables like blood pressure, I've decided to see whether a person's self-perceived health may be indicative of a health issue, so our predicting variables will be Education, Sex, GenHlth, MentHlth, PhysHlth.
+
+Note that GenHlth is a 5 point scale of participant's self-reported health, 1 being excellent, 5 being poor. MenHlth and PhysHlth are how many days of past 30 days an individual has struggled with Mental or Physical health respectively. We'll treat GenHlth as a factor and MenHlth/PhysHlth as numeric.
+
+```{r}
+head(data) # looks good
+sum(is.na(data)) # no missing data, sweet!
+
+# before we continue, let's subset our data to just the variables we plan to explore:
+data_sub = data[, c("Diabetes_binary", "Education", "Sex", "GenHlth", "MentHlth", "PhysHlth")]
+summary(data_sub)
+
+typeof(data_sub$MentHlth)
+typeof(data_sub$PhysHlth) 
+
+data_sub$Diabetes_binary = factor(data_sub$Diabetes_binary, levels = c('1','0'),
+                                     labels = c("Diabetes", "No Diabetes"))
+data_sub$Sex = factor(data_sub$Sex, levels = c('0','1'), labels = c("F","M"))
+data_sub$Education = factor(data_sub$Education, 
+                               levels = c('1','2','3','4','5','6'),
+                               labels = c("Never attended school or only kindergarten",
+                               "Grades 1 through 8 (Elementary)",
+                               "Grades 9 through 11 (Some high school)",
+                               "Grade 12 or GED (High school graduate)",
+                               "College 1 year to 3 years (Some college or technical school)",
+                               "College 4 years or more (College graduate)"))
+data_sub$GenHlth = factor(data_sub$GenHlth, levels = c('1','2','3','4','5'),
+                             labels = c("Excellent", "Very Good", "Good",
+                                        "Fair","Poor"))
+levels(data_sub$Diabetes_binary)
+levels(data_sub$Sex)
+levels(data_sub$Education)
+levels(data_sub$GenHlth)
+```
+
+Great, now we have our factors set and we've confirmed that our numeric variables are the proper type. We can now do some contingency tables to get a look at how our variables relate to each other:
+
+```{r}
+data_sub |> # let's see how Mental and Physical health vary across Male and Female
+  group_by(Sex) |>
+  summarize(Mmean = mean(MentHlth), Msd = sd(MentHlth), Pmean = mean(PhysHlth), Psd = sd(PhysHlth))
+
+data_sub |>
+  group_by(Diabetes_binary) |>
+  summarize(GenHlth)
+```
