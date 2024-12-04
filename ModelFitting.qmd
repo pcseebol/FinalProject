@@ -1,0 +1,61 @@
+---
+title: "Model_Fitting"
+author: "Patrick Seebold"
+format: pdf
+editor: visual
+---
+
+```{r, echo = FALSE}
+library(tidymodels)
+library(dplyr)
+library(ggplot2)
+```
+
+## Introduction
+
+This is Part 2 of this project, which seeks to predict diabetes status from features of the person, using data from an online data set. In our previous document, we performed an exploratory data analysis (EDA). In this document, we will train our model and select the best fit.
+
+The goal of predictive modeling is to construct a mathematical model based on prior data in order to predict some variable of interest in new data. In this case, we have a data set in which we know the ground truth for our variable of interest (i.e., whether each participant has diabetes) as well as data representing various features of each individual's health. Our goal in this document is to use this data to create such a model, tune it so that we can be confident we have the best performing model that we can, and then validate that it works on novel data. In this case, we will use self-report data of the participant's mental, physical, and general health alongside their age and education level to try and predict their diabetes status.
+
+Note that this is inherently an experimental approach - more standard methods would use features such as blood pressure and other physiological variables. For this reason, our model may not perform well. However, if we *are* able to predict diabetes status from these subjective values, this would be a very interesting finding! Plus, it keeps things interesting instead of iterating the more commonly used approach.
+
+## Our Model Types
+
+In this workflow, we will use two different types of models. First, let's discuss how these models work before we start working with the data.
+
+The first model we will use is a Classification Tree. In a Classification Tree, we create a series of progressive splitting criteria leading to different terminal classifications. For example, a tree might begin with the splitting criteria where for participants with General Health of 3 or greater, split left; else split right. Each of these splits will then go through subsequent splitting conditions, further subsetting the data into smaller subgroups. At the end of this chain of splits, each branch will terminate in a final classification. When a new data point is fed into the model to have its class predicted, it follows the iterative if-then splits until it eventually lands at one of these terminal nodes - whatever node it lands at becomes the classification for that point. These trees are handy because they are easy to understand, but they can be quite variable between training attempts.
+
+The second model type is the Random Forest model, which is essentially an ensemble approach using multiple Classification trees. Instead of using just one tree, which can be quite variable between training attempts, a Random Forest involves training a whole bunch of trees (ending up with a forest!). We then treat each tree's classification as a 'vote' in the final model for new data, and the majority vote becomes that data point's classification. Alternate 'voting' mechanisms are possible, but this is the simplest approach. The Random Forest model has benefits over individual Trees since it helps reduce the variance of the predictions, although it can be more computationally intensive.
+
+## Prepping the Data
+
+```{r}
+# First, we repeat the data loading steps from the EDA, just in case our user didn't already run that document and get the data into the workspace:
+data = read.csv("diabetes_binary_health_indicators_BRFSS2015.csv")
+
+data_sub$Diabetes_binary = factor(data_sub$Diabetes_binary, levels = c('1','0'),
+                                     labels = c("Diabetes", "No Diabetes"))
+data_sub$Sex = factor(data_sub$Sex, levels = c('0','1'),
+                      labels = c("Female","Male"))
+data_sub$Education = factor(data_sub$Education, 
+                               levels = c('1','2','3','4','5','6'),
+                               labels = c("Never attended school or only kindergarten",
+                               "Grades 1 through 8 (Elementary)",
+                               "Grades 9 through 11 (Some high school)",
+                               "Grade 12 or GED (High school graduate)",
+                               "College 1 year to 3 years (Some college or technical school)",
+                               "College 4 years or more (College graduate)"))
+data_sub$GenHlth = factor(data_sub$GenHlth, levels = c('1','2','3','4','5'),
+                             labels = c("Excellent", "Very Good", "Good",
+                                        "Fair","Poor"))
+```
+
+Now, we will split our data into the train/test sets (70/30):
+
+```{r}
+# Start out by doing our initial splits
+set.seed(42)
+splits = initial_split(data_sub, prop = 0.70)
+train = training(splits)
+test = testing(splits)
+```
