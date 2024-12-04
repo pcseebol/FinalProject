@@ -38,7 +38,8 @@ typeof(data_sub$PhysHlth)
 
 data_sub$Diabetes_binary = factor(data_sub$Diabetes_binary, levels = c('1','0'),
                                      labels = c("Diabetes", "No Diabetes"))
-data_sub$Sex = factor(data_sub$Sex, levels = c('0','1'), labels = c("F","M"))
+data_sub$Sex = factor(data_sub$Sex, levels = c('0','1'),
+                      labels = c("Female","Male"))
 data_sub$Education = factor(data_sub$Education, 
                                levels = c('1','2','3','4','5','6'),
                                labels = c("Never attended school or only kindergarten",
@@ -56,14 +57,73 @@ levels(data_sub$Education)
 levels(data_sub$GenHlth)
 ```
 
-Great, now we have our factors set and we've confirmed that our numeric variables are the proper type. We can now do some contingency tables to get a look at how our variables relate to each other:
+Great, now we have our factors set and we've confirmed that our numeric variables are the proper type. We can now do some numeric summaries to get a look at how our variables relate to each other:
 
 ```{r}
 data_sub |> # let's see how Mental and Physical health vary across Male and Female
   group_by(Sex) |>
   summarize(Mmean = mean(MentHlth), Msd = sd(MentHlth), Pmean = mean(PhysHlth), Psd = sd(PhysHlth))
 
-data_sub |>
+data_sub |> # Same summary but across education groups
+  group_by(Education) |>
+  summarize(Mmean = mean(MentHlth), Msd = sd(MentHlth), Pmean = mean(PhysHlth), Psd = sd(PhysHlth))
+
+data_sub |> # Finally, summarizing these health variables grouping by diabetes
   group_by(Diabetes_binary) |>
-  summarize(GenHlth)
+  summarize(Mmean = mean(MentHlth), Msd = sd(MentHlth), Pmean = mean(PhysHlth), Psd = sd(PhysHlth))
+
+# There is some correlation between physical and mental health variables
+cor(data_sub$MentHlth, data_sub$PhysHlth)
 ```
+
+Our summaries suggest some interesting trends! First, it looks like females may be more likely to have Mental and Physical health days than Males, although these are relatively small differences. More education is similarly associated with fewer mental and physical health days, although it is entirely possible that health problems may account for why some participants did not attain higher education. We also see that the diabetes group reports poorer health outcomes for both mental and physical health, with physical health showing an average of more \~4.5 days of physical health problems in the past 30 days vs the no diabetes group. We also see a fair correlation between the mental and physical health variables.
+
+Since we have only a few numeric variables, we can't meaningfully takes means and standard deviations for all our variables of interest. For our factor variables we will use contingency tables to get a better idea of how these things are working:
+
+```{r}
+
+# Mental and Physical health tend to score higher when General Health is reported as better
+table(data_sub$GenHlth,data_sub$PhysHlth)
+table(data_sub$GenHlth,data_sub$MentHlth)
+
+
+# Higher proportion of cases of diabetes at poorer levels of general health
+table(data_sub$Diabetes_binary, data_sub$GenHlth)
+
+# Difficult to make any firm conclusion from education/sex/diabetes table, we'll do some graphs
+table(data_sub$Diabetes_binary, data_sub$Sex, data_sub$Education)
+
+```
+
+Overall, it does look like self-reported general health may differ across diabetes vs non-diabetes patients. Mental and Physical health variables also appear to have a relationship with general health rating, which is what we'd expect to see here. It's also interesting to note that the number of poor health days tend to decrease as we move from Day 1 to Day 29, but there is an unexpectedly high number of people reporting 30 Days of issues. This suggests that there is a subset of participants that experience some sort of daily chronic issue.
+
+We'll next do some plots so we can visualize some of these relationships:
+
+```{r}
+# scatter plots of Physical*Mental Health across sex 
+g = ggplot(data_sub, aes(y = MentHlth, x = PhysHlth, color = Sex))
+g + geom_point() + geom_smooth() +
+labs(title = "Mental Health Days by Physical Health Days", x = "Physical health days in past 30 days", y = "Mental health days in past 30 days")
+```
+
+We can visualize the positive correlation between the Mental and Physical Health, as expected. Next, let's visualize education and diabetes since our table was tricky to interpret:
+
+```{r}
+# Bar plots of general health and diabetes by education level
+g = ggplot(data_sub, aes(y = Diabetes_binary))
+g + geom_bar() +
+labs(title = "Diabetes Rates by Education Level", x = "Number of Cases", y = "Diabetes Status") +
+facet_wrap(~Education)
+```
+
+It does look like we might have a lower proportion of diabetes in higher education groups, since the number of diabetes cases appears similar between the highest three education groups while the total sample size of each education group gets progressively larger. Finally, let's see how General Health plots with diabetes:
+
+```{r}
+# Bar plots of diabetes rate by general health rating
+g = ggplot(data_sub, aes(y = Diabetes_binary))
+g + geom_bar() +
+labs(title = "Diabetes Rates Across Self-Reported General Health", x = "Number of Cases", y = "Diabetes Status") +
+facet_wrap(~GenHlth)
+```
+
+Here, we see that there is a higher proportion of diabetes in groups that report lower general health. This matches with the intuition that individuals with diabetes may consider themselves to be less healthy on average. Now that we have gotten an idea for how the variables relate, we can move onto training our models in our second document.
