@@ -9,6 +9,7 @@ editor: visual
 library(tidymodels)
 library(dplyr)
 library(ggplot2)
+library(yardstick) # this will let us use log-loss for our training!
 ```
 
 ## Introduction
@@ -33,6 +34,11 @@ The second model type is the Random Forest model, which is essentially an ensemb
 # First, we repeat the data loading steps from the EDA, just in case our user didn't already run that document and get the data into the workspace:
 data = read.csv("diabetes_binary_health_indicators_BRFSS2015.csv")
 
+# grab only our variables of interest
+data_sub = data[, c("Diabetes_binary", "Education", "Sex", "GenHlth", "MentHlth", "PhysHlth")]
+summary(data_sub)
+
+# set up our factors
 data_sub$Diabetes_binary = factor(data_sub$Diabetes_binary, levels = c('1','0'),
                                      labels = c("Diabetes", "No Diabetes"))
 data_sub$Sex = factor(data_sub$Sex, levels = c('0','1'),
@@ -55,7 +61,85 @@ Now, we will split our data into the train/test sets (70/30):
 ```{r}
 # Start out by doing our initial splits
 set.seed(42)
-splits = initial_split(data_sub, prop = 0.70)
+splits = initial_split(data_sub, prop = 0.70) 
 train = training(splits)
 test = testing(splits)
 ```
+
+Now we can prepare our recipes for training the models:
+
+```{r}
+# Recipe 1: all numeric variables, no interactions needed for classificaiton
+rec1 = recipe(Diabetes_binary ~., data = train) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(Education, Sex, GenHlth) #|>
+  #prep(training = train) |>
+  #bake(train) # Checking that it worked; for validation only
+```
+
+Now that we have our recipe, we can explore fitting the training data to them. We'll look at log-loss as our metric in order to select the best recipe for our single classification tree. First, we'll set up our five-fold CV, then will create the workflows, engines, and models for each recipe. We'll need to specify our log loss so we get the right metric!f
+
+```{r}
+set.seed(42)
+cv5 = vfold_cv(train, 5) # same CV for all models
+metric = metric_set(mn_log_loss)
+  
+tree1 = decision_tree(tree_depth = tune(), min_n = 10, cost_complexity = tune()) |>
+  set_engine("rpart") |>
+  set_mode("classification")
+
+wkf1 = workflow() |>
+  add_recipe(rec1) |>
+  add_model(tree1)
+
+grid1 = grid_regular(tree_depth(), cost_complexity())
+
+fits1 = wkf1 |>
+  tune_grid(resamples = cv5, grid = grid1, metrics = metric)
+
+params1 = select_best(fits1, metric = "mn_log_loss")
+
+params1
+```
+
+Now that we have our best parameters for the single Classification Tree, let's go ahead and train the Random Forest model and find the best mn_log_lost there too:
+
+```{r}
+set.seed(42)
+rf_spec = rand_forest(mtry = tune()) |>
+  set_engine("ranger",importance = "impurity") |>
+  set_mode("classification")
+
+rf_wkf = workflow() |>
+  add_recipe(rec1) |>
+  add_model(rf_spec)
+
+rf_fit = rf_wkf |>
+  tune_grid(resamples = cv5,
+  grid = grid_regular(mtry(range=c(1,10))), metrics = metric)
+
+rf_fit |>
+  collect_metrics() |>
+  filter(.metric == "mn_log_loss") |>
+  arrange(mean)
+
+params_rf = select_best(rf_fit, metric = "mn_log_loss")
+```
+
+We see that mtry = 5 is our best outcome. We now will compare the performance of the best versions of these two model types on the test set to determine our best overall model:
+
+```{r}
+wkf1_final = wkf1 |>
+  finalize_workflow(params1) |>
+  last_fit(splits, metrics = metric)
+wkf1_final |>
+  collect_metrics()
+  
+rf_wkf_final = rf_wkf |>
+  finalize_workflow(params_rf) |>
+  last_fit(splits, metrics = metric)
+rf_wkf_final |>
+  collect_metrics()
+```
+
+We see that the log loss is better (lower) in the random forest model, so this is our overall winner! That wraps up our work for this document - next we will create an API file and then host this model in a Dockerfile to allow others to submit data for new observations and get a prediction for whether that participant has diabetes or not.
