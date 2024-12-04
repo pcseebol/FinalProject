@@ -1,5 +1,5 @@
 ---
-title: "Model_Fitting"
+title: "Modeling"
 author: "Patrick Seebold"
 format: pdf
 editor: visual
