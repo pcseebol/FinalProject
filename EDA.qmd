@@ -93,6 +93,11 @@ table(data_sub$Diabetes_binary, data_sub$GenHlth)
 # Difficult to make any firm conclusion from education/sex/diabetes table, we'll do some graphs
 table(data_sub$Diabetes_binary, data_sub$Sex, data_sub$Education)
 
+# More female than male
+table(data_sub$Sex)
+
+# Excellent is most prevalent health class in GenHlth
+table(data_sub$GenHlth)
 ```
 
 Overall, it does look like self-reported general health may differ across diabetes vs non-diabetes patients. Mental and Physical health variables also appear to have a relationship with general health rating, which is what we'd expect to see here. It's also interesting to note that the number of poor health days tend to decrease as we move from Day 1 to Day 29, but there is an unexpectedly high number of people reporting 30 Days of issues. This suggests that there is a subset of participants that experience some sort of daily chronic issue.

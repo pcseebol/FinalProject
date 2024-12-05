@@ -143,3 +143,23 @@ rf_wkf_final |>
 ```
 
 We see that the log loss is better (lower) in the random forest model, so this is our overall winner! That wraps up our work for this document - next we will create an API file and then host this model in a Dockerfile to allow others to submit data for new observations and get a prediction for whether that participant has diabetes or not.
+
+Finally, let's generate a confusion matrix for our model, which we will include in our API endpoints:
+
+```{r}
+# set up the model from training data and predict 
+model = rf_wkf_final |> 
+  extract_workflow(data = data_sub)
+
+est = predict(model, new_data = data_sub, type = "class")
+ 
+con_df = data.frame(estimate = est, truth = data_sub$Diabetes_binary) 
+
+# Rows are prediction, columns are truth
+con = table(con_df$.pred_class, con_df$truth)
+con
+```
+
+It looks like we are NOT doing a very good job predicting diabetes from self-reported measures... Of the 35346 Diabetes cases, we are predicting only 515 correct and misclassifying the rest. This means our model's predictive accuracy for diabetes is less than 1.5%, although we are doing quite well for predicting No Diabetes.
+
+This is not really a surprise, since I intentionally selected unusual predictor variables to see if we could find an unorthodox way of detecting diabetes in the data set. The big takeaway here is that we definitely should NOT be relying only on these sorts of self-reported health conditions to differentiate diabetes from non-diabetes patients. It is possible that we might have performed better if we had more conditions than just diabetes tracked for each participants - e.g., maybe we could differentiate between people with any chronic condition from those without. However, while we are focused solely on diabetes, we would be better off relying on the usual physiological predictor variables.

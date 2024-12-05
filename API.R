@@ -50,6 +50,15 @@ rf_wkf = workflow() |>
   add_recipe(rec1) |>
   add_model(rf_spec)
 
+rf_wkf_final = rf_wkf |>
+  finalize_workflow(params_rf) |>
+  last_fit(splits, metrics = metric)
+
+model = rf_wkf_final |> 
+  extract_workflow()
+
+est = predict(model, new_data = data_sub, type = "class")
+
 rf_wkf_final = rf_wkf |> 
   finalize_workflow(params_rf)
 
@@ -62,13 +71,12 @@ rf_model = rf_wkf_final |>
 #* @param input_data JSON array with five vars: Sex, Education, GenHlth, PhysHlth, MentHlth
 #* @post /predict
 
-# set default input_data in case user doesn't make a selection:
-input_data = jsonlite::toJSON(data.frame(Sex = "Female",
-                                Education = "Grade 12 or GED (High school graduate)",
-                                GenHlth = "Excellent",
-THIS DOESNT WORK YET                                PhysHlth = mean(data_sub$PhysHlth),
-                                MentHlth = mean(data_sub$MentHlth)))
-function(input_data) {
+
+function(input_data = jsonlite::toJSON(data.frame(Sex = "Female",
+                                                  Education = "Grade 12 or GED (High school graduate)",
+                                                  GenHlth = "Excellent",
+                                                  PhysHlth = mean(data_sub$PhysHlth),
+                                                  MentHlth = mean(data_sub$MentHlth)))) {
   input = as.data.frame(jsonlite::fromJSON(input_data))
   
   # Feed the baked data to the model
@@ -78,12 +86,24 @@ function(input_data) {
   list(PredictedClass = pred)
 }
 
+# Sample Function Calls for Prediction Endpoint:
+# 1.) [{"Sex":"Male","Education":"Never attended school or only kindergarten","GenHlth":"Good","PhysHlth":0,"MentHlth":20}]
+# 2.) [{"Sex":"Female","Education":"Grades 1 through 8 (Elementary)","GenHlth":"Poor","PhysHlth":7,"MentHlth":7}]
+# 3.) [{"Sex":"Male","Education":"Grade 12 or GED (High school graduate)","GenHlth":"Good","PhysHlth":20,"MentHlth":2}]
 
-# API Endpoint 2: Name and rendered Github page link
+
+#* API Endpoint 2: Name and rendered Github page link
 #* @get /readme
 function(){
   "Patrick Seebold: https://pcseebol.github.io/FinalProject/EDA.pdf"
 }
 
-# API Endpoint 3: Confusion Matrix
+#* API Endpoint 3: Confusion Matrix
+#* @post /Confusion
+function(){
+  con_df = data.frame(estimate = est, truth = data_sub$Diabetes_binary) 
 
+  # Rows are prediction, columns are truth
+  con = table(con_df$.pred_class, con_df$truth)
+  list(as.data.frame(con))
+}
