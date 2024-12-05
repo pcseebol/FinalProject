@@ -8,10 +8,10 @@ library(GGally)
 library(leaflet)
 library(yardstick)
 
-# Start by reading in the data
+# First we bring in our training data
 data = read.csv("diabetes_binary_health_indicators_BRFSS2015.csv")
 
-# run our usual cleaning/preprocessing of the data:
+# run our usual cleaning/preprocessing of the data
 data_sub = data[, c("Diabetes_binary", "Education", "Sex", "GenHlth", "MentHlth", "PhysHlth")]
 summary(data_sub)
 
@@ -31,82 +31,59 @@ data_sub$GenHlth = factor(data_sub$GenHlth, levels = c('1','2','3','4','5'),
                           labels = c("Excellent", "Very Good", "Good",
                                      "Fair","Poor"))
 
+# Now train the model - first set up our established recipe
+rec1 = recipe(Diabetes_binary ~., data = data_sub) |>
+  step_normalize(all_numeric_predictors()) |>
+  step_dummy(Education, Sex, GenHlth)
+
+# now retrain the model as before, using tuned param (mtry = 5)
+params_rf = tibble(mtry=5)
+set.seed(42)
+cv5 = vfold_cv(train, 5) # same CV for all models
+metric = metric_set(mn_log_loss)
+
+rf_spec = rand_forest(mtry = tune()) |>
+  set_engine("ranger",importance = "impurity") |>
+  set_mode("classification")
+
+rf_wkf = workflow() |>
+  add_recipe(rec1) |>
+  add_model(rf_spec)
+
+rf_wkf_final = rf_wkf |> 
+  finalize_workflow(params_rf)
+
+rf_model = rf_wkf_final |> 
+  fit(data = data_sub)
+
+#### Endpoints #####
+
+#* API Endpoint 1: Model Predictions
+#* @param input_data JSON array with five vars: Sex, Education, GenHlth, PhysHlth, MentHlth
+#* @post /predict
+
+# set default input_data in case user doesn't make a selection:
+input_data = jsonlite::toJSON(data.frame(Sex = "Female",
+                                Education = "Grade 12 or GED (High school graduate)",
+                                GenHlth = "Excellent",
+THIS DOESNT WORK YET                                PhysHlth = mean(data_sub$PhysHlth),
+                                MentHlth = mean(data_sub$MentHlth)))
+function(input_data) {
+  input = as.data.frame(jsonlite::fromJSON(input_data))
+  
+  # Feed the baked data to the model
+  pred = predict(rf_model, new_data = input, type = "class")
+  
+  # Return our predictions
+  list(PredictedClass = pred)
+}
 
 
-# API endpoint 2: Name and Github link
+# API Endpoint 2: Name and rendered Github page link
 #* @get /readme
 function(){
-  "This is our basic API"
+  "Patrick Seebold: https://pcseebol.github.io/FinalProject/EDA.pdf"
 }
 
-#* Find natural log of a number
-#* @param num Number to find ln of
-#* @get /ln
-function(num){
-  log(as.numeric(num))
-}
+# API Endpoint 3: Confusion Matrix
 
-#query with http://localhost:PORT/ln?num=1
-
-#* Find multiple of two numbers
-#* @param num1 1st number
-#* @param num2 2nd number
-#* @get /mult
-function(num1, num2){
-  as.numeric(num1)*as.numeric(num2)
-}
-
-#query with http://localhost:PORT/mult?num1=10&num2=20
-
-#* Plot of iris data
-#* @serializer png
-#* @param type base or ggally
-#* @param color TRUE or FALSE (only for ggally)
-#* @get /plotiris
-function(type = "base", color = FALSE){
-  if(tolower(type) == "ggally"){
-    if(color){
-      a <- GGally::ggpairs(iris, aes(color = Species))
-      print(a)
-    } else {
-      a <- GGally::ggpairs(iris)
-      print(a)
-    }
-  } else {
-    pairs(iris)
-  }
-}
-#http://localhost:PORT/plotiris?type=ggally
-
-
-#* Plotting widget
-#* @serializer htmlwidget
-#* @param lat latitude
-#* @param lng longitude
-#* @get /map
-function(lng = 174.768, lat = -36.852){
-  m <- leaflet::leaflet() |>
-    addTiles() |>  # Add default OpenStreetMap map tiles
-    addMarkers(as.numeric(lng), as.numeric(lat))
-  m  # Print the map
-}
-
-#query with http://localhost:PORT/map?lng=174&lat=-36
-
-
-# Choose a predictor
-#* @param predictor
-#* @get /pred
-function(predictor) {
-  data <- iris
-  if (is.numeric(data[[predictor]])) {
-    value <- mean(data[[predictor]])
-    message <- paste("The mean of", predictor, "is", value)
-    return(message)
-  } else if (predictor == "Species") {
-    table <- table(data[[predictor]])
-    return(paste0(names(table), ": ", table))
-  } else {
-    stop("Invalid predictor.")
-  }
-}
